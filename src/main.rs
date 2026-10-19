@@ -1,8 +1,9 @@
 mod chip8;
 
 use std::{
-    fs::{self},
+    fs,
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use pixels::{Pixels, SurfaceTexture};
@@ -16,6 +17,8 @@ use winit::{
 };
 
 use crate::chip8::Chip8VM;
+
+const FRAME_TIME: Duration = Duration::from_nanos(1_000_000_000 / 60);
 
 fn keypad_key(code: KeyCode) -> Option<u8> {
     Some(match code {
@@ -43,6 +46,7 @@ struct App {
     window: Option<Arc<Window>>,
     pixels: Option<Pixels<'static>>,
     chip8: Chip8VM,
+    next_frame: Instant,
 }
 
 impl ApplicationHandler for App {
@@ -65,6 +69,7 @@ impl ApplicationHandler for App {
 
         self.window = Some(window);
         self.pixels = Some(pixels);
+        self.next_frame = Instant::now();
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -103,10 +108,12 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::RedrawRequested => {
-                self.chip8.tick();
+                for _ in 0..10 {
+                    self.chip8.tick();
+                }
+                self.chip8.timer_tick();
 
-                let (Some(pixels), Some(window)) = (self.pixels.as_mut(), self.window.as_ref())
-                else {
+                let Some(pixels) = self.pixels.as_mut() else {
                     return;
                 };
 
@@ -128,13 +135,24 @@ impl ApplicationHandler for App {
                 if let Err(err) = pixels.render() {
                     eprintln!("Failed to render frame: {err}");
                     event_loop.exit();
-                    return;
                 }
-
-                window.request_redraw();
             }
             _ => (),
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        if now >= self.next_frame {
+            self.next_frame += FRAME_TIME;
+            if self.next_frame < now {
+                self.next_frame = now + FRAME_TIME;
+            }
+            if let Some(window) = self.window.as_ref() {
+                window.request_redraw();
+            }
+        }
+        event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
     }
 }
 
@@ -154,20 +172,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    if rom_file.len() > 4096 {
+    if rom_file.len() > 4096 - 0x200 {
         eprintln!("ROM file is too large");
         std::process::exit(1);
     }
 
     let vm = Chip8VM::new(&rom_file);
-
     let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = App {
         window: None,
         pixels: None,
         chip8: vm,
+        next_frame: Instant::now(),
     };
     event_loop.run_app(&mut app)?;
 

@@ -342,4 +342,13 @@ impl Chip8VM {
         let pc = (self.program_counter & MASK_12BIT) as usize;
         self.exec(self.memory[pc], self.memory[(pc + 1) % self.memory.len()]);
     }
+
+    pub fn timer_tick(&mut self) {
+        if self.dt > 0 {
+            self.dt -= 1;
+        }
+        if self.st > 0 {
+            self.st -= 1;
+        }
+    }
 }
