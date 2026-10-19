@@ -161,16 +161,16 @@ impl Chip8VM {
         self.set_flag((x >= y) as u8);
     }
 
-    fn op_shr(&mut self, word1: u8) {
-        let x = self.get_register(word1);
-        self.set_register(word1, x >> 1);
-        self.set_flag(x & 1);
+    fn op_shr(&mut self, word1: u8, word2: u8) {
+        let y = self.get_register(word2 >> 4);
+        self.set_register(word1, y >> 1);
+        self.set_flag(y & 1);
     }
 
-    fn op_shl(&mut self, word1: u8) {
-        let x = self.get_register(word1);
-        self.set_register(word1, x << 1);
-        self.set_flag(x >> 7);
+    fn op_shl(&mut self, word1: u8, word2: u8) {
+        let y = self.get_register(word2 >> 4);
+        self.set_register(word1, y << 1);
+        self.set_flag(y >> 7);
     }
 
     fn op_subn_vv(&mut self, word1: u8, word2: u8) {
@@ -275,6 +275,7 @@ impl Chip8VM {
             let addr = (self.index_register as usize + offset) % self.memory.len();
             self.memory[addr] = self.registers[offset];
         }
+        self.index_register = (self.index_register + x as u16 + 1) & MASK_12BIT;
     }
 
     fn op_ld_vx_i(&mut self, word1: u8) {
@@ -283,6 +284,7 @@ impl Chip8VM {
             let addr = (self.index_register as usize + offset) % self.memory.len();
             self.registers[offset] = self.memory[addr];
         }
+        self.index_register = (self.index_register + x as u16 + 1) & MASK_12BIT;
     }
 
     pub fn exec(&mut self, word1: u8, word2: u8) {
@@ -307,9 +309,9 @@ impl Chip8VM {
                 0x03 => self.op_xor(word1, word2),
                 0x04 => self.op_add_vv(word1, word2),
                 0x05 => self.op_sub_vv(word1, word2),
-                0x06 => self.op_shr(word1),
+                0x06 => self.op_shr(word1, word2),
                 0x07 => self.op_subn_vv(word1, word2),
-                0x0e => self.op_shl(word1),
+                0x0e => self.op_shl(word1, word2),
                 _ => {}
             },
             0x90 => self.op_sne_vv(word1, word2),
